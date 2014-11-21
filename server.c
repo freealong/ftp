@@ -163,7 +163,7 @@ int main(int argc, char **argv)
     init_server();
     
     memset(&thread, 0, sizeof(thread));
-    pthread_create(&thread[0], NULL, thread1, NULL);
+   // pthread_create(&thread[0], NULL, thread1, NULL);
     
     //loop and wait for connection
     while(1)
@@ -409,8 +409,7 @@ void store_file(char *name, char *filename, char *reply, int client_sock)
     unsigned char databuf[FILEBUF_SIZE];
     char filename_new[100];
     struct stat sbuf;
-    int bytes = 0, filesize=0;
-    long offset=0;
+    int bytes = 0, bytesrece=0, filesize=0, n=0;
     
     strcpy(filename_new, name);
     strcat(filename_new, "_");
@@ -420,16 +419,19 @@ void store_file(char *name, char *filename, char *reply, int client_sock)
 	//stpcpy(reply, "450 Cannot create the file\r\n");
 	//return;
 	printf("File not exist,try to create a new one.\n");
-	outfile = fopen(filename_new, "w");
+	outfile = fopen(filename_new, "wb+");
+	sprintf(reply, "213 filesize is 0");
+    	write(client_sock, reply, strlen(reply));
+	printf("%s\n",reply);
     }
     else
     {
       outfile = fopen(filename_new, "rb+");
       fseek(outfile, 0L, 2);
       filesize = ftell(outfile);
-      sprintf(reply, "213 filesize is %d\n", filesize);
-      //printf(reply);
+      sprintf(reply, "213 filesize is %d", filesize);
       write(client_sock, reply, strlen(reply));
+      printf("file ezsit %s\n",reply);
     }
     
     if(outfile == 0)
@@ -439,12 +441,24 @@ void store_file(char *name, char *filename, char *reply, int client_sock)
 	return;
     }
 
-    
+    n = read(client_sock, databuf, sizeof(databuf));
+    databuf[n - 1] = 0;
+    n = atoi(databuf);
+    printf("%d\n",n);
+	
+    bytesrece = 0;
+    memset(&databuf, 0, FILEBUF_SIZE);
     while((bytes = read(client_sock, databuf, FILEBUF_SIZE)) > 0)
     {
+	
 	fwrite(databuf, 1, bytes, outfile);
-	if(bytes<FILEBUF_SIZE) break;
+	bytesrece+=bytes;
+	printf("%d,%d\n",bytes,bytesrece);
+	memset(&databuf, 0, FILEBUF_SIZE);
+	if(bytesrece>=n) break;
+	//if(bytes<FILEBUF_SIZE) break;
     }
+    
     printf("read finished\n");
     fclose(outfile);
     stpcpy(reply, "226 Transfer complete\r\n");
