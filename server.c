@@ -32,13 +32,12 @@ int search_account(char *name, char *account);
 int account_confirm(char *name, char *password);
 int change_password(char *name, char *new_password);
 int change_status(char *name, int i);
-void store_file(char *name, char *filename, char *reply);
+void store_file(char *name, char *filename, char *reply, int client_sock);
 
-char buffer[FILEBUF_SIZE];
-int z;
-int server_sock, client_sock;
-struct sockaddr_in server_addr, client_addr;
-socklen_t client_addr_len;
+
+
+int server_sock;
+struct sockaddr_in server_addr;
 
 pthread_t thread[2];
 
@@ -46,6 +45,11 @@ void *thread1()
 {
   while(1)
   {
+	int z;
+	int client_sock;
+	struct sockaddr_in client_addr;
+	socklen_t client_addr_len;
+	char buffer[FILEBUF_SIZE];
 	char name[NAME_SIZE], password[PASSWORD_SIZE];
 	int log_status=0;
 	client_addr_len = sizeof(client_addr);
@@ -106,7 +110,7 @@ void *thread1()
 		if(log_status==1)
 		{
 		    //breakpoint=check_break(name, &buffer[5]);
-		    store_file(name, &buffer[5], reply);
+		    store_file(name, &buffer[5], reply, client_sock);
 		    change_status(name, 1);
 		}
 		else
@@ -164,6 +168,11 @@ int main(int argc, char **argv)
     //loop and wait for connection
     while(1)
     {
+	int z;
+	int client_sock;
+	struct sockaddr_in client_addr;
+	socklen_t client_addr_len;
+	char buffer[FILEBUF_SIZE];
 	char name[NAME_SIZE], password[PASSWORD_SIZE];
 	int log_status=0;
 	client_addr_len = sizeof(client_addr);
@@ -224,7 +233,7 @@ int main(int argc, char **argv)
 		if(log_status==1)
 		{
 		    //breakpoint=check_break(name, &buffer[5]);
-		    store_file(name, &buffer[5], reply);
+		    store_file(name, &buffer[5], reply, client_sock);
 		    change_status(name, 1);
 		}
 		else
@@ -267,6 +276,7 @@ int main(int argc, char **argv)
 
 void init_server(void)
 {
+    int z;
     printf("\nWelcome to yongqi's server!\n");
     //get the server socket
     server_sock = socket(PF_INET, SOCK_STREAM, 0);
@@ -393,7 +403,7 @@ int check_break(char *name, char *filename)
     return 0;
 }*/
 
-void store_file(char *name, char *filename, char *reply)
+void store_file(char *name, char *filename, char *reply, int client_sock)
 {
     FILE *outfile;
     unsigned char databuf[FILEBUF_SIZE];
