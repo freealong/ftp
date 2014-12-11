@@ -32,149 +32,60 @@ int search_account(char *name, char *account);
 int account_confirm(char *name, char *password);
 int change_password(char *name, char *new_password);
 int change_status(char *name, int i);
+int check_status(char *name, char *reply);
 void store_file(char *name, char *filename, char *reply, int client_sock);
-
-
-
-int server_sock;
-struct sockaddr_in server_addr;
-
-pthread_t thread[2];
-
-void *thread1()
-{
-  while(1)
-  {
-	int z;
-	int client_sock;
-	struct sockaddr_in client_addr;
-	socklen_t client_addr_len;
-	char buffer[FILEBUF_SIZE];
-	char name[NAME_SIZE], password[PASSWORD_SIZE];
-	int log_status=0;
-	client_addr_len = sizeof(client_addr);
-	printf("wait for accept...\n");
-	//accept an request
-	client_sock = accept(server_sock, (struct sockaddr *)&client_addr, &client_addr_len);
-	if(client_sock < 0)
-	{
-	    //fprintf(stderr,"%s,accept(sock, (struct sockaddr *)&client_addr, &client_len)\n",strerror(errno));
-	    //close(sock);
-	    //return 5;
-	    printf("Server Accept Failed!\n");
-	    
-	}
-	else printf("Server Accept Succeed!New socket %d\n",client_sock);
-
-	char reply[100] = "220 FTP server ready\r\n";
-	write(client_sock, reply, strlen(reply));
-	printf("--->%s",reply);
-	while(1){
-	    
-	    //deal with commands
-	    z = read(client_sock, buffer, sizeof(buffer));
-	    buffer[z-1] = 0;
-	    printf("z = %d, buffer is '%s'\n",z,buffer);
-	    char command[5];
-	    strncpy(command, buffer, 3);
-	    command[3] = 0;
-	    
-	    //char username[25] = "anonymous";
-	    if(strcmp(command, "USE") == 0)//USER
-	    {
-		stpcpy(name, &buffer[5]);
-		printf("name is %s", name);
-		stpcpy(reply, "331 Password required\r\n");
-		write(client_sock, reply, strlen(reply));
-		printf("%d -->%s", strlen(reply), reply);
-	    }
-	    else if(strcmp(command, "PAS") == 0)//PASS
-	    {
-		stpcpy(password, &buffer[5]);
-		printf("password is %s", password);
-		if(0==account_confirm(name, password))
-		{
-		    stpcpy(reply, "230 User logged in\r\n");
-		    log_status = 1;
-		}	
-		else
-		{
-		    stpcpy(reply, "530 User logg failed\r\n");
-		    log_status = 0;
-		}
-		write(client_sock, reply, strlen(reply));
-		printf("%d -->%s", strlen(reply), reply);
-	    }
-	    else if(strcmp(command, "STO") == 0)//STOR
-	    {
-		if(log_status==1)
-		{
-		    //breakpoint=check_break(name, &buffer[5]);
-		    store_file(name, &buffer[5], reply, client_sock);
-		    change_status(name, 1);
-		}
-		else
-		{
-		    strcpy(reply, "Please log in\r\n");
-		}
-		write(client_sock, reply, strlen(reply));
-		printf("%d -->%s", strlen(reply), reply);
-	    }
-	    else if(strcmp(command, "CHA") == 0)//CHANGE PASSWORD
-	    {
-		if(log_status==1)
-		{
-		    if(-1==change_password(name, &buffer[5]))
-			strcpy(reply, "Change password failed\r\n");
-		    else
-			strcpy(reply, "Change password succeed\r\n");
-		}
-		else
-		    strcpy(reply, "Please log in\r\n");
-		
-		write(client_sock, reply, strlen(reply));
-		printf("%d -->%s", strlen(reply), reply);
-	    }
-	    else if(strcmp(command, "QUI") == 0)//QUIT
-	    {
-		stpcpy(reply, "221 Goodbye.\r\n");
-		write(client_sock, reply, strlen(reply));
-		printf("%d -->%s", strlen(reply), reply);
-		break;
-	    }
-	}
-	
-	close(client_sock);
-	printf("\n");
-    }
-}
-
 void bail(const char *on_what)
 {
     perror(on_what);
     exit(1);
 }
 
+void *sub();//pthread
+
+
+int server_sock;
+
+
+pthread_t thread[100];
+int flag=0, i=0;
 
 int main(int argc, char **argv)
 {
   
 
     init_server();
-    
-    memset(&thread, 0, sizeof(thread));
-   // pthread_create(&thread[0], NULL, thread1, NULL);
-    
-    //loop and wait for connection
+    pthread_create(&thread[i], NULL, sub, NULL);    
     while(1)
     {
-	int z;
-	int client_sock;
-	struct sockaddr_in client_addr;
-	socklen_t client_addr_len;
-	char buffer[FILEBUF_SIZE];
-	char name[NAME_SIZE], password[PASSWORD_SIZE];
-	int log_status=0;
+      sleep(1);
+      if(flag==0)
+      {
+	i++;
+	pthread_create(&thread[i], NULL, sub, NULL);
+	if(i==99) i=0;
+      }
+
+
+    }    //loop and wait for connection
+
+    close(server_sock);
+    return 0;
+}
+
+void *sub()
+{
+  int z;
+  int client_sock;
+  struct sockaddr_in client_addr;
+  socklen_t client_addr_len;
+  char buffer[FILEBUF_SIZE];
+  char name[NAME_SIZE], password[PASSWORD_SIZE];
+  int log_status=0;
+  
+  flag = 1;
+  
+  while(1)
+  {
 	client_addr_len = sizeof(client_addr);
 	printf("wait for accept...\n");
 	//accept an request
@@ -185,10 +96,12 @@ int main(int argc, char **argv)
 	    //close(sock);
 	    //return 5;
 	    printf("Server Accept Failed!\n");
-	    return 1;
+	    //return 1;
 	}
 	else printf("Server Accept Succeed!New socket %d\n",client_sock);
-
+	
+	flag = 0;
+	
 	char reply[100] = "220 FTP server ready\r\n";
 	write(client_sock, reply, strlen(reply));
 	printf("--->%s",reply);
@@ -228,21 +141,6 @@ int main(int argc, char **argv)
 		write(client_sock, reply, strlen(reply));
 		printf("%d -->%s", strlen(reply), reply);
 	    }
-	    else if(strcmp(command, "STO") == 0)//STOR
-	    {
-		if(log_status==1)
-		{
-		    //breakpoint=check_break(name, &buffer[5]);
-		    store_file(name, &buffer[5], reply, client_sock);
-		    change_status(name, 1);
-		}
-		else
-		{
-		    strcpy(reply, "Please log in\r\n");
-		}
-		write(client_sock, reply, strlen(reply));
-		printf("%d -->%s", strlen(reply), reply);
-	    }
 	    else if(strcmp(command, "CHA") == 0)//CHANGE PASSWORD
 	    {
 		if(log_status==1)
@@ -258,6 +156,27 @@ int main(int argc, char **argv)
 		write(client_sock, reply, strlen(reply));
 		printf("%d -->%s", strlen(reply), reply);
 	    }
+	    else if(strcmp(command, "CHE") == 0)//CHECK STATUS
+	    {
+		check_status(name, reply);
+		write(client_sock, reply, strlen(reply));
+	      
+	    }
+	    else if(strcmp(command, "STO") == 0)//STOR
+	    {
+		if(log_status==1)
+		{
+		    //breakpoint=check_break(name, &buffer[5]);
+		    store_file(name, &buffer[5], reply, client_sock);
+		    change_status(name, 1);
+		}
+		else
+		{
+		    strcpy(reply, "Please log in\r\n");
+		}
+		write(client_sock, reply, strlen(reply));
+		printf("%d -->%s", strlen(reply), reply);
+	    }
 	    else if(strcmp(command, "QUI") == 0)//QUIT
 	    {
 		stpcpy(reply, "221 Goodbye.\r\n");
@@ -269,14 +188,14 @@ int main(int argc, char **argv)
 	
 	close(client_sock);
 	printf("\n");
+	break;
     }
-    close(server_sock);
-    return 0;
 }
 
 void init_server(void)
 {
     int z;
+    struct sockaddr_in server_addr;
     printf("\nWelcome to yongqi's server!\n");
     //get the server socket
     server_sock = socket(PF_INET, SOCK_STREAM, 0);
@@ -362,6 +281,38 @@ int change_password(char *name, char *new_password)
     system(cmd);
     return 0;
 }
+
+int check_status(char *name, char *reply)
+{
+    char cmd[100]="grep 1107820132 account";
+    char temp[ACCOUNT_SIZE];
+    FILE *infile;
+    
+    strncpy(&cmd[5], name, NAME_SIZE-1); 
+    infile = popen(cmd, "r");
+    if(fgets(temp, ACCOUNT_SIZE, infile)>0)
+    {
+      if(temp[22]=='0')
+	strcpy(reply, "554 Your homework hasn't uploaded!\n");
+      else if(temp[22]=='1')
+      {
+	strcpy(reply, "554 Your homework has uploaded! sucessfully\n");
+	if(temp[24]=='0')
+	  strcat(reply, "Your homework hasn't been graded");
+	else if(temp[24]=='1')
+	  strcat(reply, "Your grade is A");
+	else if(temp[24]=='2')
+	  strcat(reply, "Your grade is B");
+	else if(temp[24]=='3')
+	  strcat(reply, "Your grade is C");
+	else if(temp[24]=='1')
+	  strcat(reply, "Your grade is D");
+      }
+      return 0;
+    }
+    return 1;    
+}
+
 int change_status(char *name, int i)
 {
     char temp[ACCOUNT_SIZE];
@@ -370,7 +321,7 @@ int change_status(char *name, int i)
 	return -1;
     if(i==1)
       temp[22]='1';
-    else if(i=0)
+    else if(i==0)
       temp[22]='0';
     strncpy(&cmd[10],name,NAME_SIZE-1);
     strncpy(&cmd[23],temp,25);
@@ -443,6 +394,8 @@ void store_file(char *name, char *filename, char *reply, int client_sock)
 
     n = read(client_sock, databuf, sizeof(databuf));
     databuf[n - 1] = 0;
+    if(strcmp(databuf, "error")==0)
+      return;
     n = atoi(databuf);
     printf("%d\n",n);
 	
